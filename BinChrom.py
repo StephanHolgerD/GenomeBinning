@@ -2,15 +2,39 @@ import pysam
 #import pandas as pd
 import sys
 from multiprocessing import Pool
+import argparse
+
+
+
+#!/usr/bin/env python3
+
+parser = argparse.ArgumentParser(description='Binning of mappings')
+requiredNamed = parser.add_argument_group('required arguments')
+requiredNamed.add_argument('-b','--bam', help='Pos. sorted and indexed bam file', required=True)
+requiredNamed.add_argument('-o','--out', help='out file', required=True)
+
+optArguments = parser.add_argument_group('optional arguments')
+optArguments.add_argument('-c','--chromosome', help='name of chromosome/contig', required=False,default='1')
+optArguments.add_argument('-s','--binsize', help='size of bins', required=False,default=5000)
+optArguments.add_argument('--threads',default=1, help="number of cpu's  to run in paralell, ROI <1000 will always use 1 core",type=int)
+optArguments.add_argument('--tagKey',default=None, help="key for tag of interest",type=str)
+optArguments.add_argument('--tagString',default=None, help="string contained in tag of interest",type=str)
+
+
+
+
+
 
 
 class BinChrom():
-    def __init__(self,bam,binsize=100_000,chrom='1',tag=False,tagKey='',tagOfInterest='',processes=12):
+    def __init__(self,bam,binsize=100_000,chrom='1',tagKey=None,tagOfInterest=None,processes=12):
         self.chrom=chrom
         self.bam=bam
         self.binsize=binsize
         self.GetChromLenght()
-        self.tag=tag
+        self.tag=False
+        if tagKey is not None:
+            self.tag=True
         self.tagKey=tagKey
         self.tagOfInterest=tagOfInterest
         self.processes=processes
@@ -33,7 +57,6 @@ class BinChrom():
 
     def FetchReads(self,start,end):
         if not self.tag:
-
             cov=0
             with pysam.AlignmentFile(self.bam) as f:
                 for read in f.fetch(self.chrom,start,end):
@@ -59,16 +82,21 @@ class BinChrom():
 
     def StartCalc(self):
         chunk=self.chunks()
+        print('calc chunk')
         with Pool(processes=self.processes) as pool:
             results=pool.starmap(self.FetchReads,chunk)
         return results
 
 
 if __name__ == '__main__':
-    cc=BinChrom(sys.argv[1],tag=True,tagKey='XS',tagOfInterest='Unassigned_NoFeatures',binsize=5_000)
+    if len(sys.argv)==1:
+        parser.print_help(sys.stderr)
+        sys.exit(1)
+    args=parser.parse_args()
+    cc=BinChrom(args.bam,tagKey=args.tagKey,tagOfInterest=args.tagString,binsize=args.binsize,chrom=args.chromosome,processes=args.threads)
     print('start multi')
     results=cc.StartCalc()
-    with open(sys.argv[2],'w') as o:
+    with open(args.out,'w') as o:
         o.write('s,e,c\n')
         for r in results:
             o.write(f'{str(r[0])},{str(r[1])},{str(r[2])}\n')
