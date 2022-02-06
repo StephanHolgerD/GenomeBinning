@@ -15,6 +15,8 @@ requiredNamed.add_argument('-o','--out', help='out file', required=True)
 
 optArguments = parser.add_argument_group('optional arguments')
 optArguments.add_argument('-c','--chromosome', help='name of chromosome/contig', required=False,default='all')
+optArguments.add_argument('--bed', help='three column bed file for ROI', required=False,default=False)
+
 optArguments.add_argument('-s','--binsize', help='size of bins', required=False,default=5000, type=int)
 optArguments.add_argument('-p','--processes',default=1, help="number of cpu's  to run in paralell, ROI <1000 will always use 1 core",type=int)
 #optArguments.add_argument('--tagKey',default=None, help="key for tag of interest",type=str)
@@ -27,10 +29,11 @@ optArguments.add_argument('-p','--processes',default=1, help="number of cpu's  t
 
 
 class BinChrom():
-    def __init__(self,bam,binsize=100_000,chrom='all',tagKey=None,tagOfInterest=None,processes=12):
+    def __init__(self,bam,binsize=100_000,chrom='all',tagKey=None,tagOfInterest=None,processes=12,bed=False):
         self.chrom=chrom
         self.bam=bam
         self.binsize=binsize
+        self.bed=bed
         self.GetChromLenght()
         #self.tag=False
         #if tagKey is not None:
@@ -49,15 +52,36 @@ class BinChrom():
                 for c in i:
                     self.ChrLen[c.contig]=f.get_reference_length(c.contig)
 
-
     def chunks(self):
         chunkss=[]
-        for c in self.ChrLen:
-            lst=range(self.ChrLen[c])
-            n=self.binsize
-            for i in range(0, len(lst), n):
-                chunkss.append([c,lst[i:i + n][0],lst[i:i + n][-1]])
-        return chunkss
+        n=self.binsize
+
+        if self.bed:
+            with open(self.bed) as f:
+                ROI=[[x.split('\t')[0],int(x.split('\t')[1])-1,int(x.split('\t')[2].rstrip())] for x in f]
+
+
+            for roi in ROI:
+                start=roi[1]
+                end=roi[2]
+                lst=range(start,end)
+                for nn,i in enumerate(range(start,start+len(lst), n)):
+
+                    i=i-start
+                    if nn==0:
+                        chunkss.append([roi[0],lst[i:i + n][0],lst[i:i + n][-1]])
+                    else:
+                        chunkss.append([roi[0],lst[i-1:i + n][0],lst[i:i + n][-1]])
+
+            print(chunkss)
+            return chunkss
+
+        else:
+            for c in self.ChrLen:
+                lst=range(self.ChrLen[c])
+                for i in range(0, len(lst), n):
+                    chunkss.append([c,lst[i:i + n][0],lst[i:i + n][-1]])
+            return chunkss
 
     def FetchReads(self,chrom,start,end):
         cov=0
@@ -113,7 +137,7 @@ if __name__ == '__main__':
         sys.exit(1)
     args=parser.parse_args()
     #cc=BinChrom(args.bam,tagKey=args.tagKey,tagOfInterest=args.tagString,binsize=args.binsize,chrom=args.chromosome,processes=args.threads)
-    cc=BinChrom(args.bam,binsize=args.binsize,chrom=args.chromosome,processes=args.processes)
+    cc=BinChrom(args.bam,binsize=args.binsize,chrom=args.chromosome,processes=args.processes, bed=args.bed)
 
     print('start multi')
     results=cc.StartCalc()
