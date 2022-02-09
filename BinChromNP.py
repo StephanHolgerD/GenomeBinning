@@ -19,7 +19,7 @@ optArguments.add_argument('--bed', help='three column bed file for ROI', require
 
 optArguments.add_argument('-s','--binsize', help='size of bins', required=False,default=5000, type=int)
 
-optArguments.add_argument('--chunksize', help='size of chunks', required=False,default=500_000, type=int)
+optArguments.add_argument('--chunksize', help='size of chunks', required=False,default=100_000, type=int)
 
 optArguments.add_argument('-p','--processes',default=1, help="number of cpu's  to run in paralell, ROI <1000 will always use 1 core",type=int)
 
