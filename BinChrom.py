@@ -5,9 +5,10 @@ from multiprocessing import Pool
 import argparse
 import numpy as np
 from tqdm import tqdm
-
+from time import time
 #!/usr/bin/env python3
 
+t=time()
 parser = argparse.ArgumentParser(description='Binning of mappings')
 requiredNamed = parser.add_argument_group('required arguments')
 requiredNamed.add_argument('-b','--bam', help='Pos. sorted and indexed bam file', required=True)
@@ -48,17 +49,16 @@ class BinChrom():
                 self.ChrLen[self.chrom]=f.get_reference_length(self.chrom)
             else:
                 i=f.get_index_statistics()
-                print(i)
                 for c in i:
                     self.ChrLen[c.contig]=f.get_reference_length(c.contig)
 
-    def chunks(self):
+    def chunks(self, chrom):
         chunkss=[]
         n=self.binsize
 
         if self.bed:
             with open(self.bed) as f:
-                ROI=[[x.split('\t')[0],int(x.split('\t')[1])-1,int(x.split('\t')[2].rstrip())] for x in f]
+                ROI=[[x.split('\t')[0],int(x.split('\t')[1])-1,int(x.split('\t')[2].rstrip())] for x in f if x.split('\t')[0] == chrom]  
 
 
             for roi in ROI:
@@ -73,14 +73,12 @@ class BinChrom():
                     else:
                         chunkss.append([roi[0],lst[i-1:i + n][0],lst[i:i + n][-1]])
 
-            print(chunkss)
             return chunkss
 
         else:
-            for c in self.ChrLen:
-                lst=range(self.ChrLen[c])
-                for i in range(0, len(lst), n):
-                    chunkss.append([c,lst[i:i + n][0],lst[i:i + n][-1]])
+            lst=range(self.ChrLen[chrom])
+            for i in range(0, len(lst), n):
+                chunkss.append([chrom,lst[i:i + n][0],lst[i:i + n][-1]])
             return chunkss
 
     def FetchReads(self,chrom,start,end):
@@ -121,14 +119,20 @@ class BinChrom():
 #            return [start,end,cov,reads]
 
     def StartCalc(self):
-        chunk=self.chunks()
-        results=[]
-        with Pool(processes=self.processes) as pool:
-            jobs=[pool.apply_async(self.FetchReads,args=(i[0],i[1],i[2])) for i in chunk]
+        o = open(args.out,'w')
+        o.write('contig,start,end,reads,coverage\n')
 
-            for job in tqdm(jobs):
-                results.append(job.get())
-        return results
+        for c in self.ChrLen:
+            print(c)
+            chunk=self.chunks(c)
+            results=[]
+            with Pool(processes=self.processes) as pool:
+                jobs=[pool.apply_async(self.FetchReads,args=(i[0],i[1],i[2])) for i in chunk]
+
+                for job in tqdm(jobs):
+                    results.append(job.get())
+            for r in results:
+                o.write(f'{str(r[0])},{str(r[1])},{str(r[2])},{str(r[3])},{str(r[4])}\n')
 
 
 if __name__ == '__main__':
@@ -139,9 +143,6 @@ if __name__ == '__main__':
     #cc=BinChrom(args.bam,tagKey=args.tagKey,tagOfInterest=args.tagString,binsize=args.binsize,chrom=args.chromosome,processes=args.threads)
     cc=BinChrom(args.bam,binsize=args.binsize,chrom=args.chromosome,processes=args.processes, bed=args.bed)
 
-    print('start multi')
-    results=cc.StartCalc()
-    with open(args.out,'w') as o:
-        o.write('contig,start,end,reads,coverage\n')
-        for r in results:
-            o.write(f'{str(r[0])},{str(r[1])},{str(r[2])},{str(r[3])},{str(r[4])}\n')
+    cc.StartCalc()
+   
+print(time()-t)
