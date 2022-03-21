@@ -110,7 +110,7 @@ class BinChrom():
         s=[]
         e=[]
         with pysam.AlignmentFile(self.bam) as f:
-            for read in f.fetch('chr1',start, end):
+            for read in f.fetch(chrom,start, end):
                 if not read.is_unmapped:
                     s.append(read.reference_start)
                     e.append(read.reference_end)
