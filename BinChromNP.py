@@ -40,6 +40,15 @@ class BinChrom():
         with pysam.AlignmentFile(self.bam) as f:
             if self.chrom != 'all':
                 self.ChrLen[self.chrom]=f.get_reference_length(self.chrom)
+            elif self.bed:
+                with open(self.bed) as bed:
+                    chroms=set([x.split('\t')[0] for x in bed ])
+                i=f.get_index_statistics()
+                for c in i:
+                    if c.contig in chroms:
+                        self.ChrLen[c.contig]=f.get_reference_length(c.contig)
+
+
             else:
                 i=f.get_index_statistics()
                 for c in i:
@@ -133,7 +142,6 @@ class BinChrom():
         o = open(args.out,'w')
         o.write('contig,start,end,reads,coverage\n')
         for c in self.ChrLen:
-            print(c)
             results=[]
             chunk=self.chunks(c, self.chunksize)
             with Pool(processes=self.processes) as pool:
